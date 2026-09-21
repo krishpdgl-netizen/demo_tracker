@@ -1,7 +1,7 @@
 {
   "name": "panache-demo-tracker",
   "version": "1.0.0",
-  "description": "Demo Unit Tracker backend for Panache DigiLife",
+  "description": "Demo Unit Tracker for Panache DigiLife",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
@@ -10,8 +10,7 @@
   "dependencies": {
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
-    "express": "^4.19.2",
-    "googleapis": "^140.0.0"
+    "express": "^4.19.2"
   },
   "devDependencies": {
     "nodemon": "^3.1.4"
