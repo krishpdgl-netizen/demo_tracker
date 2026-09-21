@@ -1,0 +1,897 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Demo Unit Tracker — Panache DigiLife</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+:root{
+  --bg:#F0F2F7;--surface:#FFFFFF;--surface2:#F5F7FA;--border:#DDE1EB;
+  --text:#111827;--text2:#4B5563;--muted:#9CA3AF;
+  --blue:#1B4FD8;--blue-lt:#EEF2FF;--blue-hv:#1640B8;
+  --red:#DC2626;--red-lt:#FEF2F2;
+  --amber:#B45309;--amber-lt:#FFFBEB;
+  --green:#15803D;--green-lt:#F0FDF4;
+  --purple:#6D28D9;--purple-lt:#F5F3FF;
+  --r:8px;--rl:12px;
+  --sh:0 1px 3px rgba(0,0,0,.07),0 1px 2px rgba(0,0,0,.04);
+  --sh2:0 8px 24px rgba(0,0,0,.12);
+}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;
+  background:var(--bg);color:var(--text);font-size:14px;line-height:1.5;min-height:100vh;}
+
+/* Header */
+.header{background:var(--surface);border-bottom:1px solid var(--border);
+  padding:0 28px;height:58px;display:flex;align-items:center;justify-content:space-between;
+  position:sticky;top:0;z-index:100;}
+.hd-left{display:flex;align-items:center;gap:10px;}
+.logo{width:32px;height:32px;background:var(--blue);border-radius:7px;color:#fff;
+  display:flex;align-items:center;justify-content:center;font-weight:800;font-size:12px;}
+.hd-title{font-size:15px;font-weight:700;}
+.hd-sub{font-size:11px;color:var(--muted);}
+.hd-right{display:flex;gap:8px;align-items:center;}
+.sync-pill{display:flex;align-items:center;gap:5px;background:var(--surface2);
+  border:1px solid var(--border);border-radius:20px;padding:4px 10px;font-size:11px;color:var(--muted);}
+.sync-dot{width:6px;height:6px;border-radius:50%;background:var(--muted);flex-shrink:0;}
+.sync-dot.live{background:var(--green);animation:pulse 2s infinite;}
+.sync-dot.err{background:var(--red);}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+
+/* Buttons */
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border-radius:var(--r);
+  font-size:13px;font-weight:500;cursor:pointer;border:none;transition:all .15s;white-space:nowrap;}
+.btn-primary{background:var(--blue);color:#fff;}.btn-primary:hover{background:var(--blue-hv);}
+.btn-outline{background:var(--surface);color:var(--text);border:1px solid var(--border);}
+.btn-outline:hover{background:var(--surface2);}
+.btn-green{background:var(--green);color:#fff;}.btn-green:hover{background:#166534;}
+.btn-red{background:var(--red);color:#fff;}.btn-red:hover{background:#B91C1C;}
+.btn-sm{padding:6px 12px;font-size:12px;}
+.btn-xs{padding:4px 8px;font-size:11px;border-radius:6px;}
+.btn:disabled{opacity:.5;cursor:not-allowed;}
+
+/* Tabs */
+.tabs{display:flex;gap:2px;background:var(--surface2);border-radius:8px;padding:3px;width:fit-content;margin-bottom:20px;}
+.tab{padding:7px 16px;border-radius:6px;font-size:13px;font-weight:500;cursor:pointer;
+  color:var(--text2);border:none;background:none;transition:all .15s;display:flex;align-items:center;gap:6px;}
+.tab.active{background:var(--surface);color:var(--blue);box-shadow:var(--sh);}
+.tab-badge{background:var(--red);color:#fff;border-radius:10px;padding:1px 6px;font-size:10px;font-weight:700;}
+.tab-badge.warn{background:var(--amber);}
+
+/* Main */
+.main{max-width:1380px;margin:0 auto;padding:24px 28px;}
+
+/* Stats */
+.stats{display:grid;grid-template-columns:repeat(5,1fr);gap:14px;margin-bottom:24px;}
+.stat{background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);
+  padding:18px 20px;box-shadow:var(--sh);}
+.stat-lbl{font-size:11px;font-weight:600;color:var(--muted);margin-bottom:6px;}
+.stat-val{font-size:26px;font-weight:800;line-height:1;}
+.stat-sub{font-size:11px;color:var(--muted);margin-top:4px;}
+.c-blue .stat-val{color:var(--blue);}
+.c-red .stat-val{color:var(--red);}
+.c-amber .stat-val{color:var(--amber);}
+.c-green .stat-val{color:var(--green);}
+
+/* Toolbar */
+.toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px;}
+.toolbar-left{display:flex;gap:8px;align-items:center;flex:1;}
+.search-wrap{position:relative;max-width:300px;flex:1;}
+.search-wrap svg{position:absolute;left:9px;top:50%;transform:translateY(-50%);color:var(--muted);}
+.search-input{width:100%;padding:8px 12px 8px 32px;border:1px solid var(--border);
+  border-radius:var(--r);font-size:13px;background:var(--surface);color:var(--text);outline:none;}
+.search-input:focus{border-color:var(--blue);}
+.filter-sel{padding:8px 10px;border:1px solid var(--border);border-radius:var(--r);
+  font-size:13px;background:var(--surface);color:var(--text);cursor:pointer;outline:none;}
+
+/* Table */
+.table-wrap{background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);
+  box-shadow:var(--sh);overflow:hidden;}
+table{width:100%;border-collapse:collapse;}
+thead{background:var(--surface2);border-bottom:1px solid var(--border);}
+th{padding:10px 14px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);
+  letter-spacing:.4px;white-space:nowrap;}
+td{padding:12px 14px;border-bottom:1px solid var(--border);font-size:13px;vertical-align:middle;}
+tr:last-child td{border-bottom:none;}
+tr:hover td{background:#FAFBFD;}
+tr.row-ov td{background:#FFF5F5;}
+tr.row-ov:hover td{background:#FEE2E2;}
+tr.row-soon td{background:#FFFDF0;}
+tr.row-soon:hover td{background:#FEF9C3;}
+
+.uid{font-family:'SF Mono','Fira Code',monospace;font-size:11px;color:var(--blue);font-weight:700;}
+.pname{font-weight:600;}
+.sub{font-size:11px;color:var(--muted);margin-top:1px;}
+.avt{width:24px;height:24px;border-radius:50%;background:var(--blue-lt);color:var(--blue);
+  display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;margin-right:4px;}
+.badge{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;
+  border-radius:20px;font-size:11px;font-weight:600;white-space:nowrap;}
+.bd{width:5px;height:5px;border-radius:50%;}
+.b-out{background:var(--blue-lt);color:var(--blue);}.b-out .bd{background:var(--blue);}
+.b-ret{background:var(--green-lt);color:var(--green);}.b-ret .bd{background:var(--green);}
+.b-ov{background:var(--red-lt);color:var(--red);}.b-ov .bd{background:var(--red);}
+.b-ext{background:var(--purple-lt);color:var(--purple);}.b-ext .bd{background:var(--purple);}
+.b-soon{background:var(--amber-lt);color:var(--amber);}.b-soon .bd{background:var(--amber);}
+.dc{display:inline-block;padding:2px 7px;border-radius:4px;font-size:11px;font-weight:700;}
+.dc-ok{background:var(--green-lt);color:var(--green);}
+.dc-soon{background:var(--amber-lt);color:var(--amber);}
+.dc-ov{background:var(--red-lt);color:var(--red);}
+.row-acts{display:flex;gap:5px;align-items:center;}
+.ib{width:28px;height:28px;border-radius:6px;border:1px solid var(--border);background:var(--surface);
+  color:var(--text2);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s;}
+.ib:hover{background:var(--surface2);}
+.ib.edit:hover{background:var(--blue-lt);border-color:var(--blue);color:var(--blue);}
+.ib.del:hover{background:var(--red-lt);border-color:var(--red);color:var(--red);}
+
+/* Alerts */
+.alert-section{margin-bottom:20px;}
+.alert-hdr{font-size:13px;font-weight:700;display:flex;align-items:center;gap:6px;margin-bottom:10px;}
+.alert-hdr.red{color:var(--red);}
+.alert-hdr.amber{color:var(--amber);}
+.alert-cards{display:flex;flex-direction:column;gap:8px;}
+.alert-card{background:var(--surface);border-radius:var(--r);padding:14px 16px;
+  display:flex;align-items:center;gap:12px;box-shadow:var(--sh);}
+.alert-card.high{border:1.5px solid #FCA5A5;}
+.alert-card.med{border:1.5px solid #FCD34D;}
+.alert-icon{width:42px;height:42px;border-radius:8px;display:flex;align-items:center;
+  justify-content:center;font-size:18px;flex-shrink:0;}
+.ai-red{background:var(--red-lt);}
+.ai-amb{background:var(--amber-lt);}
+.alert-body{flex:1;}
+.alert-title{font-weight:600;font-size:13px;}
+.alert-meta{font-size:12px;color:var(--text2);margin-top:2px;}
+.alert-actions{display:flex;gap:6px;flex-shrink:0;}
+.cpbtn{padding:5px 10px;border-radius:6px;border:1px solid var(--border);background:var(--surface2);
+  font-size:11px;cursor:pointer;color:var(--text2);transition:all .15s;white-space:nowrap;}
+.cpbtn:hover{background:var(--surface);color:var(--text);}
+
+/* Log */
+.log-list{background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);overflow:hidden;box-shadow:var(--sh);}
+.log-row{display:flex;align-items:center;gap:10px;padding:11px 16px;border-bottom:1px solid var(--border);font-size:13px;}
+.log-row:last-child{border-bottom:none;}
+.la{padding:2px 8px;border-radius:12px;font-size:10px;font-weight:700;white-space:nowrap;}
+.la-ADD{background:#DCFCE7;color:#15803D;}
+.la-UPDATE{background:var(--blue-lt);color:var(--blue);}
+.la-DELETE{background:var(--red-lt);color:var(--red);}
+.la-RETURNED{background:var(--green-lt);color:var(--green);}
+.log-id{font-family:'SF Mono','Fira Code',monospace;font-size:11px;color:var(--blue);}
+.log-ts{font-size:11px;color:var(--muted);white-space:nowrap;margin-left:auto;}
+
+/* Loading */
+.loading{display:flex;align-items:center;justify-content:center;gap:10px;
+  padding:48px;color:var(--muted);font-size:13px;}
+.spinner{width:18px;height:18px;border:2px solid var(--border);border-top-color:var(--blue);
+  border-radius:50%;animation:spin .6s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* Empty */
+.empty{text-align:center;padding:56px 20px;color:var(--muted);}
+.empty-icon{font-size:36px;margin-bottom:10px;}
+.empty-title{font-size:15px;font-weight:600;color:var(--text2);margin-bottom:4px;}
+
+/* Toast */
+.toast-wrap{position:fixed;bottom:24px;right:24px;z-index:999;display:flex;flex-direction:column;gap:8px;}
+.toast{background:#1F2937;color:#fff;padding:11px 16px;border-radius:var(--r);font-size:13px;
+  font-weight:500;box-shadow:var(--sh2);animation:tin .2s ease;display:flex;align-items:center;gap:8px;}
+.toast.success{background:var(--green);}
+.toast.error{background:var(--red);}
+@keyframes tin{from{opacity:0;transform:translateY(8px)}}
+
+/* Modal */
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:200;
+  display:none;align-items:center;justify-content:center;padding:20px;}
+.overlay.open{display:flex;}
+.modal{background:var(--surface);border-radius:var(--rl);width:100%;max-width:620px;
+  max-height:92vh;overflow-y:auto;box-shadow:var(--sh2);}
+.modal-sm{max-width:400px;}
+.mhd{padding:18px 22px 14px;border-bottom:1px solid var(--border);
+  display:flex;align-items:center;justify-content:space-between;}
+.mhd-title{font-size:16px;font-weight:700;}
+.mclose{width:28px;height:28px;border-radius:6px;border:1px solid var(--border);
+  background:none;cursor:pointer;display:flex;align-items:center;justify-content:center;
+  color:var(--muted);font-size:16px;}
+.mclose:hover{background:var(--surface2);}
+.mbody{padding:18px 22px;display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+.mbody.single{grid-template-columns:1fr;}
+.fg{display:flex;flex-direction:column;gap:5px;}
+.fg.full{grid-column:1/-1;}
+.fg label{font-size:12px;font-weight:600;color:var(--text2);}
+.fg input,.fg select,.fg textarea{padding:9px 12px;border:1px solid var(--border);
+  border-radius:var(--r);font-size:13px;color:var(--text);background:var(--surface);
+  outline:none;transition:border-color .15s;font-family:inherit;}
+.fg input:focus,.fg select:focus,.fg textarea:focus{border-color:var(--blue);}
+.fg textarea{resize:vertical;min-height:68px;}
+.mfoot{padding:14px 22px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px;}
+.req{color:var(--red);}
+
+/* Reminder */
+.wa-box{background:#E7F8E8;border:1px solid #B7DFBA;border-radius:var(--r);padding:14px 16px;
+  font-size:13px;line-height:1.7;color:#1a1a1a;white-space:pre-wrap;margin-top:10px;}
+
+/* Confirm */
+.cfrm{padding:28px;text-align:center;}
+.cfrm-icon{font-size:36px;margin-bottom:10px;}
+.cfrm-title{font-size:16px;font-weight:700;margin-bottom:6px;}
+.cfrm-msg{color:var(--text2);font-size:13px;margin-bottom:20px;}
+.cfrm-btns{display:flex;gap:8px;justify-content:center;}
+
+@media(max-width:960px){
+  .stats{grid-template-columns:repeat(3,1fr);}
+  .main{padding:16px;}
+  .header{padding:0 16px;}
+  .mbody{grid-template-columns:1fr;}
+  .fg.full{grid-column:1;}
+}
+@media(max-width:640px){.stats{grid-template-columns:repeat(2,1fr);}}
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<header class="header">
+  <div class="hd-left">
+    <div class="logo">PD</div>
+    <div>
+      <div class="hd-title">Demo Unit Tracker</div>
+      <div class="hd-sub">Panache DigiLife &nbsp;·&nbsp; <span id="lastSync">Connecting...</span></div>
+    </div>
+  </div>
+  <div class="hd-right">
+    <div class="sync-pill">
+      <div class="sync-dot" id="syncDot"></div>
+      <span id="syncLbl">Connecting</span>
+    </div>
+    <button class="btn btn-outline btn-sm" onclick="refresh()">
+      <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+      Refresh
+    </button>
+    <button class="btn btn-outline btn-sm" onclick="exportXL()">
+      <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      Export
+    </button>
+    <button class="btn btn-primary" onclick="openForm()">
+      <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      Log Unit
+    </button>
+  </div>
+</header>
+
+<main class="main">
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <button class="tab active" id="t-tracker" onclick="switchTab('tracker')">
+      <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
+      Tracker
+    </button>
+    <button class="tab" id="t-alerts" onclick="switchTab('alerts')">
+      🔔 Reminders <span class="tab-badge" id="alertBadge" style="display:none">0</span>
+    </button>
+    <button class="tab" id="t-log" onclick="switchTab('log')">
+      📋 Activity Log
+    </button>
+  </div>
+
+  <!-- TRACKER PANE -->
+  <div id="p-tracker">
+    <div class="stats">
+      <div class="stat"><div class="stat-lbl">Total Logged</div><div class="stat-val" id="sTotal">—</div><div class="stat-sub">All time</div></div>
+      <div class="stat c-blue"><div class="stat-lbl">Currently Out</div><div class="stat-val" id="sOut">—</div><div class="stat-sub">At companies</div></div>
+      <div class="stat c-red"><div class="stat-lbl">Overdue</div><div class="stat-val" id="sOverdue">—</div><div class="stat-sub">Past return date</div></div>
+      <div class="stat c-amber"><div class="stat-lbl">Due This Week</div><div class="stat-val" id="sDue">—</div><div class="stat-sub">Within 7 days</div></div>
+      <div class="stat c-green"><div class="stat-lbl">Returned</div><div class="stat-val" id="sRet">—</div><div class="stat-sub">Safely back</div></div>
+    </div>
+
+    <div class="toolbar">
+      <div class="toolbar-left">
+        <div class="search-wrap">
+          <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input class="search-input" id="searchQ" placeholder="Search company, product, sender..." oninput="renderTable()">
+        </div>
+        <select class="filter-sel" id="fSt" onchange="renderTable()">
+          <option value="">All Status</option>
+          <option>Out</option><option>Overdue</option>
+          <option>Due Soon</option><option>Extended</option><option>Returned</option>
+        </select>
+        <select class="filter-sel" id="fSn" onchange="renderTable()">
+          <option value="">All Senders</option>
+        </select>
+      </div>
+      <span style="font-size:12px;color:var(--muted);" id="rowCount"></span>
+    </div>
+
+    <div class="table-wrap">
+      <div class="loading" id="tblLoad"><div class="spinner"></div> Loading from Google Sheets...</div>
+      <table id="mainTbl" style="display:none;">
+        <thead><tr>
+          <th>Unit ID</th><th>Product</th><th>Company</th><th>Contact</th>
+          <th>Sent By</th><th>Date Sent</th><th>Expected Return</th>
+          <th>Days Left</th><th>Status</th><th>Notes</th><th>Actions</th>
+        </tr></thead>
+        <tbody id="tbody"></tbody>
+      </table>
+      <div class="empty" id="tblEmpty" style="display:none;">
+        <div class="empty-icon">📦</div>
+        <div class="empty-title">No units found</div>
+        <div>Log your first demo unit to get started.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ALERTS PANE -->
+  <div id="p-alerts" style="display:none;">
+    <div class="loading" id="alertLoad"><div class="spinner"></div> Loading...</div>
+    <div id="alertContent" style="display:none;">
+      <div id="secOv" style="display:none;" class="alert-section">
+        <div class="alert-hdr red">🚨 Overdue — Must Retrieve Immediately</div>
+        <div class="alert-cards" id="cardsOv"></div>
+      </div>
+      <div id="secSoon" style="display:none;" class="alert-section" style="margin-top:20px;">
+        <div class="alert-hdr amber">⏳ Due Within 7 Days — Follow Up Soon</div>
+        <div class="alert-cards" id="cardsSoon"></div>
+      </div>
+      <div class="empty" id="alertEmpty" style="display:none;">
+        <div class="empty-icon">✅</div>
+        <div class="empty-title">All clear!</div>
+        <div>No overdue or upcoming units right now.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- LOG PANE -->
+  <div id="p-log" style="display:none;">
+    <div class="loading" id="logLoad"><div class="spinner"></div> Loading activity log...</div>
+    <div class="log-list" id="logList" style="display:none;"></div>
+    <div class="empty" id="logEmpty" style="display:none;">
+      <div class="empty-icon">📋</div>
+      <div class="empty-title">No activity yet</div>
+      <div>Actions appear here as units are logged.</div>
+    </div>
+  </div>
+
+</main>
+
+<div class="toast-wrap" id="toastWrap"></div>
+
+<!-- Form Modal -->
+<div class="overlay" id="frmOverlay">
+  <div class="modal">
+    <div class="mhd"><div class="mhd-title" id="frmTitle">Log Demo Unit</div>
+      <button class="mclose" onclick="closeForm()">&#x2715;</button></div>
+    <div class="mbody">
+      <div class="fg"><label>Product Name <span class="req">*</span></label>
+        <input id="fProduct" placeholder="e.g. Panache Edge Gateway"></div>
+      <div class="fg"><label>Serial / Model No.</label>
+        <input id="fSerial" placeholder="e.g. EG-2024-001"></div>
+      <div class="fg"><label>Company Name <span class="req">*</span></label>
+        <input id="fCompany" placeholder="e.g. Tata AutoComp"></div>
+      <div class="fg"><label>Contact Person <span class="req">*</span></label>
+        <input id="fContact" placeholder="Name at the company"></div>
+      <div class="fg"><label>Contact Phone</label>
+        <input id="fPhone" placeholder="+91 98200 00000"></div>
+      <div class="fg"><label>Contact Email</label>
+        <input id="fEmail" type="email" placeholder="email@company.com"></div>
+      <div class="fg"><label>Sent By <span class="req">*</span></label>
+        <input id="fSentBy" placeholder="Sales person name"></div>
+      <div class="fg"><label>Purpose</label>
+        <select id="fPurpose">
+          <option value="">Select purpose</option>
+          <option>POC Evaluation</option><option>Trade Show Demo</option>
+          <option>Customer Evaluation</option><option>Integration Testing</option>
+          <option>Long-term Trial</option><option>Other</option>
+        </select></div>
+      <div class="fg"><label>Date Sent <span class="req">*</span></label>
+        <input id="fDateSent" type="date"></div>
+      <div class="fg"><label>Expected Return <span class="req">*</span></label>
+        <input id="fReturnDate" type="date"></div>
+      <div class="fg"><label>Status</label>
+        <select id="fStatus"><option>Out</option><option>Extended</option><option>Returned</option></select></div>
+      <div class="fg"><label>Courier / AWB No.</label>
+        <input id="fCourier" placeholder="Delhivery / Blue Dart tracking no."></div>
+      <div class="fg full"><label>Notes / Remarks</label>
+        <textarea id="fNotes" placeholder="Condition, arrangements, follow-up..."></textarea></div>
+    </div>
+    <div class="mfoot">
+      <button class="btn btn-outline" onclick="closeForm()">Cancel</button>
+      <button class="btn btn-primary" id="saveBtn" onclick="saveUnit()">Save Entry</button>
+    </div>
+  </div>
+</div>
+
+<!-- Return Modal -->
+<div class="overlay" id="retOverlay">
+  <div class="modal modal-sm">
+    <div class="mhd"><div class="mhd-title">Mark as Returned</div>
+      <button class="mclose" onclick="closeRet()">&#x2715;</button></div>
+    <div class="mbody single">
+      <div style="font-weight:600;" id="retName"></div>
+      <div style="font-size:12px;color:var(--text2);margin-top:-8px;" id="retMeta"></div>
+      <div class="fg"><label>Actual Return Date</label><input id="retDate" type="date"></div>
+      <div class="fg"><label>Condition Notes (optional)</label>
+        <textarea id="retNotes" placeholder="Condition on return, missing items, damage..."></textarea></div>
+    </div>
+    <div class="mfoot">
+      <button class="btn btn-outline" onclick="closeRet()">Cancel</button>
+      <button class="btn btn-green" onclick="doReturn()">Confirm Returned</button>
+    </div>
+  </div>
+</div>
+
+<!-- Delete Confirm -->
+<div class="overlay" id="delOverlay">
+  <div class="modal modal-sm">
+    <div class="cfrm">
+      <div class="cfrm-icon">🗑️</div>
+      <div class="cfrm-title">Delete this record?</div>
+      <div class="cfrm-msg" id="delMsg"></div>
+      <div class="cfrm-btns">
+        <button class="btn btn-outline" onclick="closeDel()">Cancel</button>
+        <button class="btn btn-red" onclick="doDel()">Yes, Delete</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Reminder Modal -->
+<div class="overlay" id="remOverlay">
+  <div class="modal modal-sm" style="max-width:500px;">
+    <div class="mhd"><div class="mhd-title">Send Reminder</div>
+      <button class="mclose" onclick="closeRem()">&#x2715;</button></div>
+    <div style="padding:18px 22px;">
+      <div style="font-size:13px;color:var(--text2);margin-bottom:4px;">
+        Message for <strong id="remContact"></strong>:
+      </div>
+      <div class="wa-box" id="remText"></div>
+      <div style="display:flex;gap:8px;margin-top:12px;">
+        <button class="btn btn-outline" style="flex:1;" onclick="copyRem('wa')">📱 Copy for WhatsApp</button>
+        <button class="btn btn-outline" style="flex:1;" onclick="copyRem('email')">📧 Copy for Email</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── Config ────────────────────────────────────────────────────────────────────
+// Backend URL: when served from the same Express server, use relative path.
+// If your Render URL is https://panache-demo.onrender.com, just use "/api"
+const API = window.location.origin + "/api";
+
+// ── State ─────────────────────────────────────────────────────────────────────
+let units   = [];
+let logs    = [];
+let editId  = null;
+let delId   = null;
+let retId   = null;
+let refreshTimer = null;
+
+// ── Status helpers ────────────────────────────────────────────────────────────
+function status(u) {
+  if (u.Status === "Returned") return "Returned";
+  if (!u.ExpectedReturn) return u.Status || "Out";
+  const today = new Date(); today.setHours(0,0,0,0);
+  const ret   = new Date(u.ExpectedReturn + "T00:00:00");
+  if (isNaN(ret)) return u.Status || "Out";
+  const d = Math.round((ret - today) / 86400000);
+  if (d < 0)  return "Overdue";
+  if (d <= 7) return "Due Soon";
+  if (u.Status === "Extended") return "Extended";
+  return "Out";
+}
+
+function daysLeft(u) {
+  if (u.Status === "Returned") return null;
+  const today = new Date(); today.setHours(0,0,0,0);
+  const ret   = new Date((u.ExpectedReturn || "") + "T00:00:00");
+  if (isNaN(ret)) return null;
+  return Math.round((ret - today) / 86400000);
+}
+
+// ── API calls ─────────────────────────────────────────────────────────────────
+async function apiFetch(path, opts = {}) {
+  const r = await fetch(API + path, {
+    headers: { "Content-Type": "application/json" },
+    ...opts
+  });
+  const json = await r.json();
+  if (!r.ok) throw new Error(json.error || "Server error");
+  return json;
+}
+
+// ── Refresh ───────────────────────────────────────────────────────────────────
+async function refresh() {
+  setSyncState("loading");
+  try {
+    const [uRes, lRes] = await Promise.all([
+      apiFetch("/units"),
+      apiFetch("/logs").catch(() => ({ logs: [] }))
+    ]);
+    units = uRes.units || [];
+    logs  = lRes.logs  || [];
+    renderAll();
+    setSyncState("live");
+    document.getElementById("lastSync").textContent =
+      "Synced " + new Date().toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
+  } catch(e) {
+    setSyncState("err");
+    toast("Cannot reach server. Check backend.", "error");
+  }
+}
+
+function setSyncState(s) {
+  const dot = document.getElementById("syncDot");
+  const lbl = document.getElementById("syncLbl");
+  dot.className = "sync-dot";
+  if (s === "live") { dot.classList.add("live"); lbl.textContent = "Live"; }
+  else if (s === "err") { dot.classList.add("err"); lbl.textContent = "Offline"; }
+  else lbl.textContent = "Syncing...";
+}
+
+// ── Render ────────────────────────────────────────────────────────────────────
+function renderAll() {
+  renderStats();
+  renderTable();
+  renderAlerts();
+  renderLog();
+  updateSenderFilter();
+}
+
+function renderStats() {
+  let out = 0, ov = 0, ret = 0, soon = 0;
+  units.forEach(u => {
+    const s = status(u);
+    if (s === "Returned")  ret++;
+    else if (s === "Overdue") ov++;
+    else if (s === "Due Soon") { out++; soon++; }
+    else out++;
+  });
+  setText("sTotal", units.length);
+  setText("sOut", out);
+  setText("sOverdue", ov);
+  setText("sDue", soon);
+  setText("sRet", ret);
+  const total = ov + soon;
+  const b = document.getElementById("alertBadge");
+  b.textContent = total;
+  b.style.display = total ? "" : "none";
+}
+
+function renderTable() {
+  const q   = document.getElementById("searchQ").value.toLowerCase();
+  const fSt = document.getElementById("fSt").value;
+  const fSn = document.getElementById("fSn").value;
+  const load = document.getElementById("tblLoad");
+  const tbl  = document.getElementById("mainTbl");
+  const emp  = document.getElementById("tblEmpty");
+  const tbody = document.getElementById("tbody");
+
+  load.style.display = "none";
+  tbl.style.display  = "table";
+
+  let rows = units.filter(u => {
+    const s = status(u);
+    const mQ  = !q  || [u.Product, u.Company, u.Contact, u.SentBy, u.Serial, u.Purpose]
+                         .some(f => f && f.toLowerCase().includes(q));
+    const mSt = !fSt || s === fSt;
+    const mSn = !fSn || u.SentBy === fSn;
+    return mQ && mSt && mSn;
+  });
+
+  setText("rowCount", rows.length === units.length
+    ? `${units.length} records`
+    : `${rows.length} of ${units.length}`);
+
+  if (!rows.length) { tbl.style.display = "none"; emp.style.display = "block"; return; }
+  emp.style.display = "none";
+
+  const bmap = { Out:"b-out", Returned:"b-ret", Overdue:"b-ov", Extended:"b-ext", "Due Soon":"b-soon" };
+
+  tbody.innerHTML = rows.map(u => {
+    const s    = status(u);
+    const days = daysLeft(u);
+    const rCls = s === "Overdue" ? "row-ov" : s === "Due Soon" ? "row-soon" : "";
+    const init = (u.SentBy || "?").split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase();
+
+    let dayHtml = '<span style="color:var(--muted);font-size:11px;">—</span>';
+    if (s === "Returned") dayHtml = '<span style="color:var(--green);font-size:11px;">✓ Returned</span>';
+    else if (days !== null) {
+      const cls = days < 0 ? "dc-ov" : days <= 7 ? "dc-soon" : "dc-ok";
+      const lbl = days < 0 ? `${Math.abs(days)}d overdue` : days === 0 ? "Today!" : `${days}d left`;
+      dayHtml = `<span class="dc ${cls}">${lbl}</span>`;
+    }
+
+    const retBtn = s !== "Returned"
+      ? `<button class="btn btn-xs btn-green" onclick="openRet('${u.ID}')">✓ Back</button>` : "";
+    const remBtn = s !== "Returned"
+      ? `<button class="btn btn-xs" style="background:var(--amber-lt);color:var(--amber);border:1px solid #FCD34D;" onclick="openRem('${u.ID}')">🔔</button>` : "";
+
+    return `<tr class="${rCls}">
+      <td><span class="uid">${u.ID}</span></td>
+      <td><div class="pname">${u.Product||"—"}</div>${u.Serial?`<div class="sub">${u.Serial}</div>`:""}</td>
+      <td><div style="font-weight:500;">${u.Company||"—"}</div>${u.Purpose?`<div class="sub">${u.Purpose}</div>`:""}</td>
+      <td><div>${u.Contact||"—"}</div><div class="sub">${u.ContactInfo||u.Phone||""}</div></td>
+      <td><span class="avt">${init}</span>${u.SentBy||"—"}</td>
+      <td>${fmt(u.DateSent)}</td>
+      <td>${fmt(u.ExpectedReturn)}</td>
+      <td>${dayHtml}</td>
+      <td><span class="badge ${bmap[s]||"b-out"}"><span class="bd"></span>${s}</span></td>
+      <td style="max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;color:var(--muted);" title="${u.Notes||""}">${u.Notes||"—"}</td>
+      <td><div class="row-acts">
+        ${retBtn}${remBtn}
+        <button class="ib edit" onclick="openEdit('${u.ID}')" title="Edit">
+          <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+        </button>
+        <button class="ib del" onclick="openDel('${u.ID}')" title="Delete">
+          <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>
+        </button>
+      </div></td>
+    </tr>`;
+  }).join("");
+}
+
+function renderAlerts() {
+  document.getElementById("alertLoad").style.display = "none";
+  document.getElementById("alertContent").style.display = "block";
+  const ov   = units.filter(u => status(u) === "Overdue");
+  const soon = units.filter(u => status(u) === "Due Soon");
+
+  if (!ov.length && !soon.length) {
+    document.getElementById("alertEmpty").style.display = "block";
+    document.getElementById("secOv").style.display = "none";
+    document.getElementById("secSoon").style.display = "none";
+    return;
+  }
+  document.getElementById("alertEmpty").style.display = "none";
+
+  if (ov.length) {
+    document.getElementById("secOv").style.display = "block";
+    document.getElementById("cardsOv").innerHTML = ov.map(u => alertCard(u, "high")).join("");
+  } else document.getElementById("secOv").style.display = "none";
+
+  if (soon.length) {
+    document.getElementById("secSoon").style.display = "block";
+    document.getElementById("cardsSoon").innerHTML = soon.map(u => alertCard(u, "med")).join("");
+  } else document.getElementById("secSoon").style.display = "none";
+}
+
+function alertCard(u, lvl) {
+  const d   = daysLeft(u);
+  const ov  = d !== null && d < 0;
+  const dlbl = ov ? `${Math.abs(d)}d overdue` : `${d}d left`;
+  return `<div class="alert-card ${lvl}">
+    <div class="alert-icon ${lvl==="high"?"ai-red":"ai-amb"}">${lvl==="high"?"🚨":"⏳"}</div>
+    <div class="alert-body">
+      <div class="alert-title">${u.Product} → ${u.Company}</div>
+      <div class="alert-meta">Contact: <strong>${u.Contact}</strong>${u.ContactInfo?` · ${u.ContactInfo}`:""} &nbsp;|&nbsp; Sent by: ${u.SentBy} &nbsp;|&nbsp; <strong style="color:${ov?"var(--red)":"var(--amber)"}">${dlbl}</strong> &nbsp;|&nbsp; Expected: ${fmt(u.ExpectedReturn)}</div>
+    </div>
+    <div class="alert-actions">
+      <button class="cpbtn" onclick="openRem('${u.ID}')">Send Reminder</button>
+      <button class="cpbtn" onclick="openRet('${u.ID}')">✓ Mark Back</button>
+    </div>
+  </div>`;
+}
+
+function renderLog() {
+  document.getElementById("logLoad").style.display = "none";
+  const list = document.getElementById("logList");
+  const emp  = document.getElementById("logEmpty");
+  if (!logs.length) { emp.style.display = "block"; list.style.display = "none"; return; }
+  emp.style.display = "none"; list.style.display = "block";
+  list.innerHTML = logs.slice(0, 150).map(l => {
+    const ts = l.Timestamp ? new Date(l.Timestamp).toLocaleString("en-IN",
+      { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }) : "";
+    return `<div class="log-row">
+      <span class="la la-${l.Action||"ADD"}">${l.Action||"—"}</span>
+      <span class="log-id">${l.UnitID||""}</span>
+      <span style="flex:1;color:var(--text2);">${l.Details||""}</span>
+      ${l.DoneBy?`<span style="font-size:11px;color:var(--muted);">by ${l.DoneBy}</span>`:""}
+      <span class="log-ts">${ts}</span>
+    </div>`;
+  }).join("");
+}
+
+function updateSenderFilter() {
+  const sel = document.getElementById("fSn");
+  const cur = sel.value;
+  const s   = [...new Set(units.map(u => u.SentBy).filter(Boolean))].sort();
+  sel.innerHTML = '<option value="">All Senders</option>' +
+    s.map(v => `<option ${v===cur?"selected":""} value="${v}">${v}</option>`).join("");
+}
+
+// ── Form ──────────────────────────────────────────────────────────────────────
+function openForm() {
+  editId = null;
+  document.getElementById("frmTitle").textContent = "Log Demo Unit";
+  clearFrm();
+  document.getElementById("fDateSent").value = today();
+  document.getElementById("frmOverlay").classList.add("open");
+}
+
+function openEdit(id) {
+  const u = units.find(x => x.ID === id); if (!u) return;
+  editId = id;
+  document.getElementById("frmTitle").textContent = "Edit Demo Unit";
+  setVal("fProduct", u.Product); setVal("fSerial", u.Serial);
+  setVal("fCompany", u.Company); setVal("fContact", u.Contact);
+  setVal("fPhone", u.ContactInfo || u.Phone || ""); setVal("fEmail", u.Email || "");
+  setVal("fSentBy", u.SentBy); setVal("fPurpose", u.Purpose || "");
+  setVal("fDateSent", u.DateSent); setVal("fReturnDate", u.ExpectedReturn);
+  setVal("fStatus", u.Status || "Out"); setVal("fCourier", u.Courier || "");
+  setVal("fNotes", u.Notes || "");
+  document.getElementById("frmOverlay").classList.add("open");
+}
+
+function closeForm() { document.getElementById("frmOverlay").classList.remove("open"); editId = null; }
+
+function clearFrm() {
+  ["fProduct","fSerial","fCompany","fContact","fPhone","fEmail",
+   "fSentBy","fDateSent","fReturnDate","fCourier","fNotes"].forEach(id => setVal(id, ""));
+  setVal("fPurpose", ""); setVal("fStatus", "Out");
+}
+
+async function saveUnit() {
+  const product  = val("fProduct").trim();
+  const company  = val("fCompany").trim();
+  const contact  = val("fContact").trim();
+  const sentBy   = val("fSentBy").trim();
+  const dateSent = val("fDateSent");
+  const retDate  = val("fReturnDate");
+  if (!product || !company || !contact || !sentBy || !dateSent || !retDate) {
+    toast("Fill in all required fields (marked *).", "error"); return;
+  }
+  const data = {
+    Product: product, Serial: val("fSerial").trim(),
+    Company: company, Contact: contact,
+    ContactInfo: val("fPhone").trim(), Phone: val("fPhone").trim(),
+    Email: val("fEmail").trim(), SentBy: sentBy,
+    DateSent: dateSent, ExpectedReturn: retDate,
+    Purpose: val("fPurpose"), Status: val("fStatus"),
+    Courier: val("fCourier").trim(), Notes: val("fNotes").trim()
+  };
+  const btn = document.getElementById("saveBtn");
+  btn.disabled = true; btn.textContent = "Saving...";
+  try {
+    if (editId) {
+      await apiFetch(`/units/${editId}`, { method: "PUT", body: JSON.stringify(data) });
+      toast("Unit updated!", "success");
+    } else {
+      await apiFetch("/units", { method: "POST", body: JSON.stringify(data) });
+      toast("Unit logged!", "success");
+    }
+    closeForm();
+    await refresh();
+  } catch(e) {
+    toast("Save failed: " + e.message, "error");
+  } finally {
+    btn.disabled = false; btn.textContent = "Save Entry";
+  }
+}
+
+// ── Return ────────────────────────────────────────────────────────────────────
+function openRet(id) {
+  const u = units.find(x => x.ID === id); if (!u) return;
+  retId = id;
+  setText("retName", u.Product);
+  setText("retMeta", `from ${u.Company} · sent by ${u.SentBy}`);
+  setVal("retDate", today()); setVal("retNotes", "");
+  document.getElementById("retOverlay").classList.add("open");
+}
+function closeRet() { document.getElementById("retOverlay").classList.remove("open"); retId = null; }
+async function doReturn() {
+  if (!retId) return;
+  try {
+    await apiFetch(`/units/${retId}/return`, {
+      method: "PATCH",
+      body: JSON.stringify({ date: val("retDate"), notes: val("retNotes") })
+    });
+    toast("Marked as returned!", "success");
+    closeRet(); await refresh();
+  } catch(e) { toast("Failed: " + e.message, "error"); }
+}
+
+// ── Delete ────────────────────────────────────────────────────────────────────
+function openDel(id) {
+  const u = units.find(x => x.ID === id);
+  delId = id;
+  setText("delMsg", u ? `Delete "${u.Product}" at ${u.Company}? This cannot be undone.` : "Delete this record?");
+  document.getElementById("delOverlay").classList.add("open");
+}
+function closeDel() { document.getElementById("delOverlay").classList.remove("open"); delId = null; }
+async function doDel() {
+  if (!delId) return;
+  try {
+    await apiFetch(`/units/${delId}`, { method: "DELETE" });
+    toast("Record deleted.", "success");
+    closeDel(); await refresh();
+  } catch(e) { toast("Delete failed: " + e.message, "error"); }
+}
+
+// ── Reminder ──────────────────────────────────────────────────────────────────
+function openRem(id) {
+  const u = units.find(x => x.ID === id); if (!u) return;
+  const d   = daysLeft(u);
+  const ov  = d !== null && d < 0;
+  const dlbl = ov ? `${Math.abs(d)} day${Math.abs(d)!==1?"s":""} ago` : `in ${d} day${d!==1?"s":""}`;
+  const msg = ov
+    ? `Hi ${u.Contact},\n\nThis is a reminder from Panache DigiLife regarding the demo unit of *${u.Product}*${u.Serial?" ("+u.Serial+")":""} sent to you on ${fmt(u.DateSent)}.\n\nThe unit was due for return on *${fmt(u.ExpectedReturn)}* — that was ${dlbl}. Request you to please arrange for its return at the earliest.\n\nKindly confirm the return date or let us know if you need more time.\n\nRegards,\n${u.SentBy}\nPanache DigiLife`
+    : `Hi ${u.Contact},\n\nHope all is well! Quick heads-up from Panache DigiLife.\n\nThe demo unit of *${u.Product}*${u.Serial?" ("+u.Serial+")":""} sent to you on ${fmt(u.DateSent)} is due for return on *${fmt(u.ExpectedReturn)}* — ${dlbl}.\n\nPlease let us know if a pickup needs to be arranged or if you'd like a short extension.\n\nRegards,\n${u.SentBy}\nPanache DigiLife`;
+  setText("remContact", u.Contact + (u.ContactInfo ? ` (${u.ContactInfo})` : ""));
+  setText("remText", msg);
+  document.getElementById("remOverlay").classList.add("open");
+}
+function closeRem() { document.getElementById("remOverlay").classList.remove("open"); }
+function copyRem() {
+  navigator.clipboard.writeText(document.getElementById("remText").textContent)
+    .then(() => toast("Copied! Paste in WhatsApp or Email.", "success"));
+}
+
+// ── Tabs ──────────────────────────────────────────────────────────────────────
+function switchTab(name) {
+  ["tracker","alerts","log"].forEach(t => {
+    document.getElementById(`p-${t}`).style.display = t === name ? "" : "none";
+    document.getElementById(`t-${t}`).classList.toggle("active", t === name);
+  });
+}
+
+// ── Export ────────────────────────────────────────────────────────────────────
+function exportXL() {
+  if (!units.length) { toast("No data to export.", "error"); return; }
+  const rows = units.map(u => ({
+    "Unit ID": u.ID, "Product": u.Product, "Serial": u.Serial,
+    "Company": u.Company, "Contact": u.Contact,
+    "Phone": u.ContactInfo||u.Phone||"", "Email": u.Email||"",
+    "Sent By": u.SentBy, "Date Sent": u.DateSent,
+    "Expected Return": u.ExpectedReturn, "Actual Return": u.ActualReturn||"",
+    "Purpose": u.Purpose, "Status": status(u),
+    "Days Left": status(u) !== "Returned" ? daysLeft(u) : "",
+    "Courier": u.Courier||"", "Notes": u.Notes||""
+  }));
+  const ws = XLSX.utils.json_to_sheet(rows);
+  ws["!cols"] = [10,22,14,22,18,16,22,14,12,14,14,18,12,10,20,32].map(w=>({wch:w}));
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Demo Units");
+  const sum = [
+    {Metric:"Export Date",Value:new Date().toLocaleDateString("en-IN")},
+    {Metric:"Total",Value:units.length},
+    {Metric:"Out",Value:units.filter(u=>status(u)!=="Returned").length},
+    {Metric:"Overdue",Value:units.filter(u=>status(u)==="Overdue").length},
+    {Metric:"Due This Week",Value:units.filter(u=>status(u)==="Due Soon").length},
+    {Metric:"Returned",Value:units.filter(u=>status(u)==="Returned").length}
+  ];
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(sum), "Summary");
+  XLSX.utils.writeFile(wb, `Panache_Demo_Units_${today().replace(/-/g,"")}.xlsx`);
+  toast("Excel downloaded!", "success");
+}
+
+// ── Utils ─────────────────────────────────────────────────────────────────────
+function fmt(d) {
+  if (!d) return "—";
+  const dt = new Date(d + "T00:00:00");
+  return isNaN(dt) ? d : dt.toLocaleDateString("en-IN", { day:"2-digit", month:"short", year:"numeric" });
+}
+function today() { return new Date().toISOString().split("T")[0]; }
+function val(id) { return document.getElementById(id).value; }
+function setVal(id, v) { document.getElementById(id).value = v; }
+function setText(id, v) { document.getElementById(id).textContent = v; }
+
+function toast(msg, type = "default") {
+  const el = document.createElement("div");
+  el.className = `toast ${type}`;
+  el.innerHTML = `<span>${{success:"✓",error:"✕",default:"·"}[type]}</span> ${msg}`;
+  document.getElementById("toastWrap").appendChild(el);
+  setTimeout(() => el.remove(), 3500);
+}
+
+// Backdrop close
+["frmOverlay","retOverlay","delOverlay","remOverlay"].forEach(id => {
+  document.getElementById(id).addEventListener("click", function(e) {
+    if (e.target === this) this.classList.remove("open");
+  });
+});
+
+// ── Boot ──────────────────────────────────────────────────────────────────────
+refresh();
+refreshTimer = setInterval(refresh, 60000); // auto-sync every 60 seconds
+</script>
+</body>
+</html>
