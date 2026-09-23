@@ -1024,7 +1024,26 @@ function exportXL() {
     {Metric:"Returned",Value:units.filter(u=>status(u)==="Returned").length}
   ];
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(sum), "Summary");
-  XLSX.utils.writeFile(wb, `Panache_Demo_Units_${today().replace(/-/g,"")}.xlsx`);
+  const filename = `Panache_Demo_Units_${today().replace(/-/g,"")}.xlsx`;
+  // Some browser builds of SheetJS expose XLSX.write() but not XLSX.utils.writeFile().
+  // Use writeFile when available, otherwise download the generated XLSX blob directly.
+  if (typeof XLSX.utils.writeFile === "function") {
+    XLSX.utils.writeFile(wb, filename);
+  } else if (typeof XLSX.write === "function") {
+    const out = XLSX.write(wb, { bookType: "xlsx", type: "array" });
+    const blob = new Blob([out], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  } else {
+    toast("Excel library failed to load. Refresh the page and try again.", "error");
+    return;
+  }
   toast("Excel downloaded!", "success");
 }
 
