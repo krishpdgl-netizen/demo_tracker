@@ -206,6 +206,18 @@ tr.row-soon:hover td{background:#FEF9C3;}
 .req{color:var(--red);}
 
 /* Scan */
+/* Multi-product log */
+.product-list{grid-column:1/-1;border:1px solid var(--border);border-radius:var(--r);background:var(--surface2);padding:12px;}
+.product-list-hd{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px;}
+.product-list-title{font-size:12px;font-weight:700;color:var(--text);}
+.product-row{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1.4fr) 90px 34px;gap:8px;align-items:end;margin-bottom:8px;padding:10px;background:var(--surface);border:1px solid var(--border);border-radius:8px;}
+.product-row label{font-size:10px;color:var(--muted);display:block;margin-bottom:3px;}
+.product-row input{width:100%;padding:8px 9px;border:1px solid var(--border);border-radius:6px;background:#fff;font:inherit;font-size:12px;}
+.product-row input:focus{outline:none;border-color:var(--blue);}
+.product-row .remove-product{height:34px;width:34px;border:1px solid #FCA5A5;background:#FEF2F2;color:var(--red);border-radius:6px;cursor:pointer;font-weight:700;}
+.product-total{font-size:11px;color:var(--text2);margin-top:5px;}
+@media(max-width:650px){.product-row{grid-template-columns:1fr 1fr 75px 34px;} .product-row .product-name{grid-column:1/-1;}}
+
 .scan-zone{border:2px dashed var(--border);border-radius:var(--r);padding:20px;
   text-align:center;cursor:pointer;transition:all .2s;background:var(--surface2);
   grid-column:1/-1;position:relative;}
@@ -329,7 +341,7 @@ tr.row-soon:hover td{background:#FEF9C3;}
       <div class="loading" id="tblLoad"><div class="spinner"></div> Loading from Google Sheets...</div>
       <table id="mainTbl" style="display:none;">
         <thead><tr>
-          <th>Unit ID</th><th>Product</th><th>Company</th><th>Contact</th>
+          <th>Unit ID</th><th>Product</th><th>Qty</th><th>Company</th><th>Contact</th>
           <th>Sent By</th><th>Date Sent</th><th>Expected Return</th>
           <th>Days Left</th><th>Status</th><th>Notes</th><th>Actions</th>
         </tr></thead>
@@ -390,7 +402,7 @@ tr.row-soon:hover td{background:#FEF9C3;}
         ondragover="event.preventDefault();this.classList.add('drag')"
         ondragleave="this.classList.remove('drag')"
         ondrop="handleDrop(event)">
-        <input type="file" id="scanFile" accept="image/*,application/pdf" onchange="handleScanFile(this)">
+        <input type="file" id="scanFile" accept="image/*,application/pdf" capture="environment" onchange="handleScanFile(this)">
         <div class="scan-zone-icon">📄</div>
         <div class="scan-zone-label">Scan Dispatch Challan</div>
         <div class="scan-zone-sub">Click to upload or drag & drop &nbsp;·&nbsp; Photo or PDF</div>
@@ -413,10 +425,16 @@ tr.row-soon:hover td{background:#FEF9C3;}
       <!-- Missing fields banner -->
       <div class="missing-banner" id="missingBanner"></div>
 
-      <div class="fg"><label>Product Name <span class="req">*</span></label>
-        <input id="fProduct" placeholder="e.g. Panache Edge Gateway"></div>
-      <div class="fg"><label>Serial / Model No.</label>
-        <input id="fSerial" placeholder="e.g. EG-2024-001"></div>
+      <div class="product-list">
+        <div class="product-list-hd">
+          <div>
+            <div class="product-list-title">Products in this log <span class="req">*</span></div>
+            <div class="product-total" id="productTotal">1 product · 1 unit</div>
+          </div>
+          <button type="button" class="btn btn-outline" style="padding:6px 10px;font-size:11px;" onclick="addProductRow()">+ Add Product</button>
+        </div>
+        <div id="productRows"></div>
+      </div>
       <div class="fg"><label>Company Name <span class="req">*</span></label>
         <input id="fCompany" placeholder="e.g. Tata AutoComp"></div>
       <div class="fg"><label>Contact Person <span class="req">*</span></label>
@@ -752,11 +770,63 @@ function updateSenderFilter() {
 }
 
 // ── Form ──────────────────────────────────────────────────────────────────────
+function resetProductRows() {
+  renderProductRows([{ Product:"", Serial:"", Quantity:1 }]);
+}
+
+function renderProductRows(products) {
+  const wrap = document.getElementById("productRows");
+  if (!wrap) return;
+  wrap.innerHTML = "";
+  (products && products.length ? products : [{ Product:"", Serial:"", Quantity:1 }]).forEach(p => addProductRow(p, false));
+  updateProductTotal();
+}
+
+function addProductRow(product = {}, update = true) {
+  const wrap = document.getElementById("productRows");
+  if (!wrap) return;
+  const row = document.createElement("div");
+  row.className = "product-row";
+  row.innerHTML = `
+    <div class="product-name"><label>Product Name</label><input class="p-name" placeholder="e.g. Panache Edge Gateway" value="${escapeHtmlAttr(product.Product || "")}"></div>
+    <div><label>Serial / Model No.</label><input class="p-serial" placeholder="Serial / model" value="${escapeHtmlAttr(product.Serial || "")}"></div>
+    <div><label>Quantity</label><input class="p-qty" type="number" min="1" step="1" value="${Math.max(1, Number(product.Quantity || 1) || 1)}" oninput="updateProductTotal()"></div>
+    <button type="button" class="remove-product" title="Remove product" onclick="this.parentElement.remove(); ensureProductRow(); updateProductTotal();">×</button>
+  `;
+  wrap.appendChild(row);
+  if (update) updateProductTotal();
+}
+
+function ensureProductRow() {
+  const wrap = document.getElementById("productRows");
+  if (wrap && !wrap.children.length) addProductRow();
+}
+
+function getProductRows() {
+  return [...document.querySelectorAll("#productRows .product-row")].map(row => ({
+    Product: row.querySelector(".p-name")?.value.trim() || "",
+    Serial: row.querySelector(".p-serial")?.value.trim() || "",
+    Quantity: Math.max(1, parseInt(row.querySelector(".p-qty")?.value || "1", 10) || 1)
+  })).filter(p => p.Product || p.Serial);
+}
+
+function updateProductTotal() {
+  const rows = getProductRows();
+  const total = rows.reduce((sum, p) => sum + (Number(p.Quantity) || 0), 0);
+  const el = document.getElementById("productTotal");
+  if (el) el.textContent = `${rows.length} product${rows.length !== 1 ? "s" : ""} · ${total} unit${total !== 1 ? "s" : ""}`;
+}
+
+function escapeHtmlAttr(v) {
+  return String(v ?? "").replace(/&/g,"&amp;").replace(/"/g,"&quot;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+}
+
 function openForm() {
   editId = null;
   document.getElementById("frmTitle").textContent = "Log Demo Unit";
   clearFrm();
   clearScan();
+  resetProductRows();
   document.getElementById("fDateSent").value = today();
   document.getElementById("frmOverlay").classList.add("open");
 }
@@ -765,7 +835,8 @@ function openEdit(id) {
   const u = units.find(x => x.ID === id); if (!u) return;
   editId = id;
   document.getElementById("frmTitle").textContent = "Edit Demo Unit";
-  setVal("fProduct", u.Product); setVal("fSerial", u.Serial);
+  const editProducts = Array.isArray(u.Products) && u.Products.length ? u.Products : [{ Product:u.Product||"", Serial:u.Serial||"", Quantity:Number(u.Quantity||u.Qty||1) }];
+  renderProductRows(editProducts);
   setVal("fCompany", u.Company); setVal("fContact", u.Contact);
   setVal("fPhone", u.ContactInfo || u.Phone || ""); setVal("fEmail", u.Email || "");
   setVal("fSentBy", u.SentBy); setVal("fPurpose", u.Purpose || "");
@@ -778,39 +849,56 @@ function openEdit(id) {
 function closeForm() { document.getElementById("frmOverlay").classList.remove("open"); editId = null; clearScan(); }
 
 function clearFrm() {
-  ["fProduct","fSerial","fCompany","fContact","fPhone","fEmail",
+  ["fCompany","fContact","fPhone","fEmail",
    "fSentBy","fDateSent","fReturnDate","fCourier","fNotes"].forEach(id => setVal(id, ""));
   setVal("fPurpose", ""); setVal("fStatus", "Out");
 }
 
 async function saveUnit() {
-  const product  = val("fProduct").trim();
+  const products = getProductRows();
   const company  = val("fCompany").trim();
   const contact  = val("fContact").trim();
   const sentBy   = val("fSentBy").trim();
   const dateSent = val("fDateSent");
   const retDate  = val("fReturnDate");
-  if (!product || !company || !contact || !sentBy || !dateSent || !retDate) {
+
+  if (!products.length || products.some(p => !p.Product || !Number.isFinite(p.Quantity) || p.Quantity < 1)) {
+    toast("Add at least one product and a valid quantity for every product.", "error"); return;
+  }
+  if (!company || !contact || !sentBy || !dateSent || !retDate) {
     toast("Fill in all required fields (marked *).", "error"); return;
   }
+
+  const first = products[0];
   const data = {
-    Product: product, Serial: val("fSerial").trim(),
-    Company: company, Contact: contact,
-    ContactInfo: val("fPhone").trim(), Phone: val("fPhone").trim(),
-    Email: val("fEmail").trim(), SentBy: sentBy,
-    DateSent: dateSent, ExpectedReturn: retDate,
-    Purpose: val("fPurpose"), Status: val("fStatus"),
-    Courier: val("fCourier").trim(), Notes: val("fNotes").trim()
+    // Legacy fields retained so existing rows/backends remain readable.
+    Product: first.Product,
+    Serial: first.Serial,
+    Quantity: first.Quantity,
+    Products: products,
+    Company: company,
+    Contact: contact,
+    ContactInfo: val("fPhone").trim(),
+    Phone: val("fPhone").trim(),
+    Email: val("fEmail").trim(),
+    SentBy: sentBy,
+    DateSent: dateSent,
+    ExpectedReturn: retDate,
+    Purpose: val("fPurpose"),
+    Status: val("fStatus"),
+    Courier: val("fCourier").trim(),
+    Notes: val("fNotes").trim()
   };
+
   const btn = document.getElementById("saveBtn");
   btn.disabled = true; btn.textContent = "Saving...";
   try {
     if (editId) {
       await apiFetch(`/units/${editId}`, { method: "PUT", body: JSON.stringify(data) });
-      toast("Unit updated!", "success");
+      toast("Log updated!", "success");
     } else {
       await apiFetch("/units", { method: "POST", body: JSON.stringify(data) });
-      toast("Unit logged!", "success");
+      toast(`${products.length} product${products.length !== 1 ? "s" : ""} logged!`, "success");
     }
     closeForm();
     await refresh();
@@ -892,6 +980,7 @@ function exportXL() {
   if (!units.length) { toast("No data to export.", "error"); return; }
   const rows = units.map(u => ({
     "Unit ID": u.ID, "Product": u.Product, "Serial": u.Serial,
+    "Quantity": Number(u.Quantity||u.Qty||1),
     "Company": u.Company, "Contact": u.Contact,
     "Phone": u.ContactInfo||u.Phone||"", "Email": u.Email||"",
     "Sent By": u.SentBy, "Date Sent": u.DateSent,
@@ -901,7 +990,7 @@ function exportXL() {
     "Courier": u.Courier||"", "Notes": u.Notes||""
   }));
   const ws = XLSX.utils.json_to_sheet(rows);
-  ws["!cols"] = [10,22,14,22,18,16,22,14,12,14,14,18,12,10,20,32].map(w=>({wch:w}));
+  ws["!cols"] = [10,22,14,10,22,18,16,22,14,12,14,14,18,12,10,20,32].map(w=>({wch:w}));
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "Demo Units");
   const sum = [
@@ -947,8 +1036,6 @@ function toast(msg, type = "default") {
 
 // Fields we try to fill from scan, mapped to their form input IDs
 const SCAN_FIELD_MAP = {
-  Product:        "fProduct",
-  Serial:         "fSerial",
   Company:        "fCompany",
   Contact:        "fContact",
   Phone:          "fPhone",
@@ -961,12 +1048,12 @@ const SCAN_FIELD_MAP = {
   Notes:          "fNotes",
 };
 
-// Required fields — must be filled for the form to be saveable
-const REQUIRED_FIELDS = ["fProduct", "fCompany", "fContact", "fSentBy", "fDateSent", "fReturnDate"];
+const REQUIRED_FIELDS = ["fCompany", "fContact", "fSentBy", "fDateSent", "fReturnDate"];
 const REQUIRED_LABELS = {
-  fProduct: "Product Name", fCompany: "Company", fContact: "Contact Person",
+  fCompany: "Company", fContact: "Contact Person",
   fSentBy: "Sent By", fDateSent: "Date Sent", fReturnDate: "Expected Return"
 };
+
 
 function handleDrop(e) {
   e.preventDefault();
@@ -1031,24 +1118,35 @@ function fileToBase64(file) {
 }
 
 function fillFormFromScan(fields) {
+  fields = fields || {};
   let filled = 0;
   let missingRequired = [];
 
-  // Fill each field
-  Object.entries(SCAN_FIELD_MAP).forEach(([key, inputId]) => {
-    const el  = document.getElementById(inputId);
-    const val = (fields[key] || "").trim();
+  const scannedProducts = Array.isArray(fields.products) && fields.products.length
+    ? fields.products
+    : (fields.Product ? [{ Product: fields.Product, Serial: fields.Serial || "", Quantity: Number(fields.Quantity || 1) }] : []);
 
-    if (val) {
-      el.value = val;
+  if (scannedProducts.length) {
+    renderProductRows(scannedProducts.map(p => ({
+      Product: String(p.Product || p.product || "").trim(),
+      Serial: String(p.Serial || p.serial || p.Model || p.model || "").trim(),
+      Quantity: Math.max(1, Number(p.Quantity || p.quantity || p.Qty || 1) || 1)
+    })));
+    filled += scannedProducts.length;
+  }
+
+  Object.entries(SCAN_FIELD_MAP).forEach(([key, inputId]) => {
+    const el = document.getElementById(inputId);
+    const v = String(fields[key] || "").trim();
+    if (v) {
+      el.value = v;
       el.classList.add("field-filled");
       el.classList.remove("field-missing");
       filled++;
     }
   });
 
-  // Handle Purpose dropdown — try to match to existing options
-  const purposeVal = (fields.Purpose || "").trim();
+  const purposeVal = String(fields.Purpose || "").trim();
   if (purposeVal) {
     const sel = document.getElementById("fPurpose");
     const match = [...sel.options].find(o =>
@@ -1058,13 +1156,11 @@ function fillFormFromScan(fields) {
     if (match) sel.value = match.value;
   }
 
-  // Set default date sent to today if Gemini didn't find it
   if (!fields.DateSent) {
     document.getElementById("fDateSent").value = today();
     document.getElementById("fDateSent").classList.add("field-filled");
   }
 
-  // Find missing required fields
   REQUIRED_FIELDS.forEach(id => {
     const el = document.getElementById(id);
     if (!el.value.trim()) {
@@ -1073,22 +1169,24 @@ function fillFormFromScan(fields) {
     }
   });
 
-  // Show success strip
+  if (!scannedProducts.length) {
+    missingRequired.unshift("Products");
+  } else if (scannedProducts.some(p => !p.Product)) {
+    missingRequired.unshift("Product names");
+  }
+
+  const totalQty = getProductRows().reduce((sum, p) => sum + (Number(p.Quantity) || 0), 0);
   const strip = document.getElementById("scanStrip");
   document.getElementById("scanStripMsg").textContent =
-    `${filled} field${filled !== 1 ? "s" : ""} filled from challan.`;
+    `${scannedProducts.length || 0} product${scannedProducts.length !== 1 ? "s" : ""} · ${totalQty} unit${totalQty !== 1 ? "s" : ""} extracted from challan.`;
   strip.classList.add("show");
 
-  // Show missing banner
   if (missingRequired.length) {
     const banner = document.getElementById("missingBanner");
-    banner.innerHTML = `<strong>Please fill in manually:</strong> ${missingRequired.join(", ")}`;
+    banner.innerHTML = `<strong>Please fill in manually:</strong> ${[...new Set(missingRequired)].join(", ")}`;
     banner.classList.add("show");
-    // Scroll to first missing field
     const firstMissing = REQUIRED_FIELDS.find(id => !document.getElementById(id).value.trim());
     if (firstMissing) document.getElementById(firstMissing).focus();
-  } else {
-    toast("All required fields filled from challan!", "success");
   }
 }
 
