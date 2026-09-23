@@ -195,7 +195,19 @@ Return this exact structure (use empty string "" for any field not found):
 app.get("*", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "index.html"));
 });
+app.use((err, req, res, next) => {
+  if (err.type === "entity.too.large") {
+    return res.status(413).json({
+      error: "Image is too large. Please take a smaller photo or upload an image under 10 MB."
+    });
+  }
 
+  console.error(err);
+
+  res.status(500).json({
+    error: err.message || "Internal server error"
+  });
+});
 app.listen(PORT, () => {
   console.log(`✅  Demo Tracker running on port ${PORT}`);
   console.log(`   Apps Script: ${SCRIPT_URL.substring(0, 60)}...`);
