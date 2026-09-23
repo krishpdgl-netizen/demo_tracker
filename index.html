@@ -205,6 +205,30 @@ tr.row-soon:hover td{background:#FEF9C3;}
 .mfoot{padding:14px 22px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px;}
 .req{color:var(--red);}
 
+/* Scan */
+.scan-zone{border:2px dashed var(--border);border-radius:var(--r);padding:20px;
+  text-align:center;cursor:pointer;transition:all .2s;background:var(--surface2);
+  grid-column:1/-1;position:relative;}
+.scan-zone:hover,.scan-zone.drag{border-color:var(--blue);background:var(--blue-lt);}
+.scan-zone input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%;}
+.scan-zone-icon{font-size:24px;margin-bottom:6px;}
+.scan-zone-label{font-size:13px;font-weight:600;color:var(--text2);}
+.scan-zone-sub{font-size:11px;color:var(--muted);margin-top:2px;}
+.scan-preview{width:100%;max-height:140px;object-fit:contain;border-radius:6px;
+  margin-top:10px;border:1px solid var(--border);display:none;}
+.scan-bar{grid-column:1/-1;background:var(--blue-lt);border:1px solid #BFDBFE;
+  border-radius:var(--r);padding:10px 14px;display:none;align-items:center;gap:10px;font-size:13px;}
+.scan-bar.show{display:flex;}
+.scan-bar .spinner{width:16px;height:16px;border-width:2px;flex-shrink:0;}
+.scan-result-strip{grid-column:1/-1;background:var(--green-lt);border:1px solid #86EFAC;
+  border-radius:var(--r);padding:10px 14px;font-size:12px;color:var(--green);
+  display:none;align-items:center;gap:8px;}
+.scan-result-strip.show{display:flex;}
+.field-filled{border-color:var(--green) !important;background:#F0FDF4 !important;}
+.field-missing{border-color:var(--amber) !important;background:var(--amber-lt) !important;}
+.missing-banner{grid-column:1/-1;background:var(--amber-lt);border:1px solid #FCD34D;
+  border-radius:var(--r);padding:10px 14px;font-size:12px;color:var(--amber);display:none;}
+.missing-banner.show{display:block;}
 /* Reminder */
 .wa-box{background:#E7F8E8;border:1px solid #B7DFBA;border-radius:var(--r);padding:14px 16px;
   font-size:13px;line-height:1.7;color:#1a1a1a;white-space:pre-wrap;margin-top:10px;}
@@ -360,6 +384,35 @@ tr.row-soon:hover td{background:#FEF9C3;}
     <div class="mhd"><div class="mhd-title" id="frmTitle">Log Demo Unit</div>
       <button class="mclose" onclick="closeForm()">&#x2715;</button></div>
     <div class="mbody">
+
+      <!-- Scan zone -->
+      <div class="scan-zone" id="scanZone"
+        ondragover="event.preventDefault();this.classList.add('drag')"
+        ondragleave="this.classList.remove('drag')"
+        ondrop="handleDrop(event)">
+        <input type="file" id="scanFile" accept="image/*,application/pdf" onchange="handleScanFile(this)">
+        <div class="scan-zone-icon">📄</div>
+        <div class="scan-zone-label">Scan Dispatch Challan</div>
+        <div class="scan-zone-sub">Click to upload or drag & drop &nbsp;·&nbsp; Photo or PDF</div>
+        <img id="scanPreview" class="scan-preview">
+      </div>
+
+      <!-- Scanning indicator -->
+      <div class="scan-bar" id="scanBar">
+        <div class="spinner"></div>
+        <span>Reading challan with Gemini...</span>
+      </div>
+
+      <!-- Scan success strip -->
+      <div class="scan-result-strip" id="scanStrip">
+        <span>✓</span>
+        <span id="scanStripMsg"></span>
+        <button style="margin-left:auto;background:none;border:none;cursor:pointer;font-size:11px;color:var(--green);text-decoration:underline;" onclick="clearScan()">Rescan</button>
+      </div>
+
+      <!-- Missing fields banner -->
+      <div class="missing-banner" id="missingBanner"></div>
+
       <div class="fg"><label>Product Name <span class="req">*</span></label>
         <input id="fProduct" placeholder="e.g. Panache Edge Gateway"></div>
       <div class="fg"><label>Serial / Model No.</label>
@@ -455,7 +508,7 @@ tr.row-soon:hover td{background:#FEF9C3;}
 // ── Config ────────────────────────────────────────────────────────────────────
 // Backend URL: when served from the same Express server, use relative path.
 // If your Render URL is https://panache-demo.onrender.com, just use "/api"
-const API = "https://demo-tracker-ruj6.onrender.com/api";
+const API = window.location.origin + "/api";
 
 // ── State ─────────────────────────────────────────────────────────────────────
 let units   = [];
@@ -703,6 +756,7 @@ function openForm() {
   editId = null;
   document.getElementById("frmTitle").textContent = "Log Demo Unit";
   clearFrm();
+  clearScan();
   document.getElementById("fDateSent").value = today();
   document.getElementById("frmOverlay").classList.add("open");
 }
@@ -721,7 +775,7 @@ function openEdit(id) {
   document.getElementById("frmOverlay").classList.add("open");
 }
 
-function closeForm() { document.getElementById("frmOverlay").classList.remove("open"); editId = null; }
+function closeForm() { document.getElementById("frmOverlay").classList.remove("open"); editId = null; clearScan(); }
 
 function clearFrm() {
   ["fProduct","fSerial","fCompany","fContact","fPhone","fEmail",
@@ -888,6 +942,159 @@ function toast(msg, type = "default") {
     if (e.target === this) this.classList.remove("open");
   });
 });
+
+// ── Scan challan ──────────────────────────────────────────────────────────────
+
+// Fields we try to fill from scan, mapped to their form input IDs
+const SCAN_FIELD_MAP = {
+  Product:        "fProduct",
+  Serial:         "fSerial",
+  Company:        "fCompany",
+  Contact:        "fContact",
+  Phone:          "fPhone",
+  Email:          "fEmail",
+  SentBy:         "fSentBy",
+  DateSent:       "fDateSent",
+  ExpectedReturn: "fReturnDate",
+  Purpose:        "fPurpose",
+  Courier:        "fCourier",
+  Notes:          "fNotes",
+};
+
+// Required fields — must be filled for the form to be saveable
+const REQUIRED_FIELDS = ["fProduct", "fCompany", "fContact", "fSentBy", "fDateSent", "fReturnDate"];
+const REQUIRED_LABELS = {
+  fProduct: "Product Name", fCompany: "Company", fContact: "Contact Person",
+  fSentBy: "Sent By", fDateSent: "Date Sent", fReturnDate: "Expected Return"
+};
+
+function handleDrop(e) {
+  e.preventDefault();
+  document.getElementById("scanZone").classList.remove("drag");
+  const file = e.dataTransfer.files[0];
+  if (file) processScanFile(file);
+}
+
+function handleScanFile(input) {
+  const file = input.files[0];
+  if (file) processScanFile(file);
+}
+
+async function processScanFile(file) {
+  // Show image preview if it's an image
+  const preview = document.getElementById("scanPreview");
+  if (file.type.startsWith("image/")) {
+    const reader = new FileReader();
+    reader.onload = e => { preview.src = e.target.result; preview.style.display = "block"; };
+    reader.readAsDataURL(file);
+  } else {
+    preview.style.display = "none";
+  }
+
+  // Show scanning bar
+  document.getElementById("scanBar").classList.add("show");
+  document.getElementById("scanStrip").classList.remove("show");
+  document.getElementById("missingBanner").classList.remove("show");
+  clearFieldHighlights();
+
+  const formData = new FormData();
+  formData.append("file", file);
+
+  try {
+    const res = await fetch("/api/scan", { method: "POST", body: formData });
+    const data = await res.json();
+
+    document.getElementById("scanBar").classList.remove("show");
+
+    if (!res.ok || data.error) {
+      toast("Scan failed: " + (data.error || "Unknown error"), "error");
+      return;
+    }
+
+    fillFormFromScan(data.fields);
+
+  } catch(e) {
+    document.getElementById("scanBar").classList.remove("show");
+    toast("Scan error: " + e.message, "error");
+  }
+}
+
+function fillFormFromScan(fields) {
+  let filled = 0;
+  let missingRequired = [];
+
+  // Fill each field
+  Object.entries(SCAN_FIELD_MAP).forEach(([key, inputId]) => {
+    const el  = document.getElementById(inputId);
+    const val = (fields[key] || "").trim();
+
+    if (val) {
+      el.value = val;
+      el.classList.add("field-filled");
+      el.classList.remove("field-missing");
+      filled++;
+    }
+  });
+
+  // Handle Purpose dropdown — try to match to existing options
+  const purposeVal = (fields.Purpose || "").trim();
+  if (purposeVal) {
+    const sel = document.getElementById("fPurpose");
+    const match = [...sel.options].find(o =>
+      o.value.toLowerCase().includes(purposeVal.toLowerCase()) ||
+      purposeVal.toLowerCase().includes(o.value.toLowerCase())
+    );
+    if (match) sel.value = match.value;
+  }
+
+  // Set default date sent to today if Gemini didn't find it
+  if (!fields.DateSent) {
+    document.getElementById("fDateSent").value = today();
+    document.getElementById("fDateSent").classList.add("field-filled");
+  }
+
+  // Find missing required fields
+  REQUIRED_FIELDS.forEach(id => {
+    const el = document.getElementById(id);
+    if (!el.value.trim()) {
+      el.classList.add("field-missing");
+      missingRequired.push(REQUIRED_LABELS[id]);
+    }
+  });
+
+  // Show success strip
+  const strip = document.getElementById("scanStrip");
+  document.getElementById("scanStripMsg").textContent =
+    `${filled} field${filled !== 1 ? "s" : ""} filled from challan.`;
+  strip.classList.add("show");
+
+  // Show missing banner
+  if (missingRequired.length) {
+    const banner = document.getElementById("missingBanner");
+    banner.innerHTML = `<strong>Please fill in manually:</strong> ${missingRequired.join(", ")}`;
+    banner.classList.add("show");
+    // Scroll to first missing field
+    const firstMissing = REQUIRED_FIELDS.find(id => !document.getElementById(id).value.trim());
+    if (firstMissing) document.getElementById(firstMissing).focus();
+  } else {
+    toast("All required fields filled from challan!", "success");
+  }
+}
+
+function clearFieldHighlights() {
+  Object.values(SCAN_FIELD_MAP).forEach(id => {
+    const el = document.getElementById(id);
+    if (el) { el.classList.remove("field-filled", "field-missing"); }
+  });
+}
+
+function clearScan() {
+  document.getElementById("scanFile").value = "";
+  document.getElementById("scanPreview").style.display = "none";
+  document.getElementById("scanStrip").classList.remove("show");
+  document.getElementById("missingBanner").classList.remove("show");
+  clearFieldHighlights();
+}
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
 refresh();
